@@ -1,0 +1,493 @@
+# Genealogical Source Registry
+# Organized by geographic region and source type
+# Used by Smart Search Router to determine which databases to search
+
+sources:
+  # =============================================================================
+  # CHEROKEE NATION / NATIVE AMERICAN SOURCES
+  # =============================================================================
+
+  dawes_rolls:
+    name: Dawes Rolls (Final Rolls)
+    description: Final rolls of citizens of the Five Civilized Tribes
+    url: https://www.archives.gov/research/native-americans/dawes
+    api_endpoint: null  # Manual search only
+    provider: nara
+    source_level: primary
+    coverage:
+      geographic:
+        - Cherokee Nation
+        - Indian Territory
+        - Oklahoma
+      temporal:
+        start: 1898
+        end: 1914
+    record_types:
+      - enrollment
+      - census
+    ethnic_markers:
+      - Cherokee
+      - Creek
+      - Choctaw
+      - Chickasaw
+      - Seminole
+    notes: |
+      Final rolls for allotment. Includes blood quantum.
+      Cards contain family relationships, age, and residence.
+
+  baker_roll:
+    name: Baker Roll (1924)
+    description: Roll of Eastern Band Cherokee for judgment fund distribution
+    url: https://www.fold3.com/title/65/baker-roll
+    provider: fold3
+    source_level: primary
+    coverage:
+      geographic:
+        - North Carolina
+        - Eastern Band Cherokee
+      temporal:
+        start: 1924
+        end: 1924
+    record_types:
+      - enrollment
+    ethnic_markers:
+      - Cherokee
+      - Eastern Band Cherokee
+
+  chapman_roll:
+    name: Chapman Roll (1852)
+    description: Census of Cherokee remaining in NC, TN, GA, AL after removal
+    url: https://www.familysearch.org/search/collection/1932400
+    provider: familysearch
+    source_level: primary
+    coverage:
+      geographic:
+        - North Carolina
+        - Tennessee
+        - Georgia
+        - Alabama
+      temporal:
+        start: 1851
+        end: 1852
+    record_types:
+      - census
+    ethnic_markers:
+      - Cherokee
+
+  mullay_roll:
+    name: Mullay Roll (1848)
+    description: Census of Cherokee who remained east after Trail of Tears
+    provider: nara
+    source_level: primary
+    coverage:
+      geographic:
+        - North Carolina
+        - Tennessee
+      temporal:
+        start: 1848
+        end: 1848
+    record_types:
+      - census
+    ethnic_markers:
+      - Cherokee
+
+  # =============================================================================
+  # BELGIAN SOURCES
+  # =============================================================================
+
+  belgian_state_archives:
+    name: Belgian State Archives (Rijksarchief)
+    description: Civil registration, parish registers, notarial records
+    url: https://search.arch.be
+    api_endpoint: https://search.arch.be/api
+    provider: belgian_archives
+    source_level: primary
+    coverage:
+      geographic:
+        - Belgium
+        - Antwerp
+        - Brabant
+        - East Flanders
+        - West Flanders
+        - Hainaut
+        - Liege
+        - Limburg
+        - Luxembourg
+        - Namur
+      temporal:
+        start: 1796
+        end: 1912
+    record_types:
+      - civil_registration
+      - birth
+      - marriage
+      - death
+      - census
+    notes: |
+      Civil registration began in Belgium in 1796 under French rule.
+      Records before 1796 are in parish registers.
+
+  belgian_parish_registers:
+    name: Belgian Parish Registers
+    description: Catholic church records before civil registration
+    url: https://search.arch.be
+    provider: belgian_archives
+    source_level: primary
+    coverage:
+      geographic:
+        - Belgium
+        - Southern Netherlands
+      temporal:
+        start: 1500
+        end: 1796
+    record_types:
+      - baptism
+      - marriage
+      - burial
+    notes: |
+      Pre-1796 records. Language varies: Latin, French, Dutch.
+      Coverage varies by parish - some start as early as 1500.
+
+  antwerp_felixarchief:
+    name: FelixArchief Antwerp
+    description: City archives of Antwerp
+    url: https://felixarchief.antwerpen.be
+    provider: felixarchief
+    source_level: primary
+    coverage:
+      geographic:
+        - Antwerp
+        - Antwerp Province
+      temporal:
+        start: 1200
+        end: 1950
+    record_types:
+      - civil_registration
+      - guild_records
+      - population_registers
+      - notarial
+
+  # =============================================================================
+  # NETHERLANDS SOURCES
+  # =============================================================================
+
+  wiewaswie:
+    name: WieWasWie
+    description: Dutch civil registration and church records
+    url: https://www.wiewaswie.nl
+    api_endpoint: null
+    provider: wiewaswie
+    source_level: primary
+    coverage:
+      geographic:
+        - Netherlands
+        - Noord-Brabant
+        - Limburg
+        - Gelderland
+        - Zuid-Holland
+        - Noord-Holland
+      temporal:
+        start: 1811
+        end: 1942
+    record_types:
+      - civil_registration
+      - birth
+      - marriage
+      - death
+    notes: Civil registration began 1811 in Netherlands.
+
+  # =============================================================================
+  # UNITED STATES - GENERAL
+  # =============================================================================
+
+  familysearch:
+    name: FamilySearch
+    description: LDS genealogy database with billions of records
+    url: https://www.familysearch.org
+    api_endpoint: https://api.familysearch.org
+    provider: familysearch
+    source_level: tertiary  # Indexed, but has primary images
+    coverage:
+      geographic:
+        - United States
+        - Global
+      temporal:
+        start: 1500
+        end: 2000
+    record_types:
+      - census
+      - vital_records
+      - military
+      - immigration
+      - church_records
+    notes: |
+      Tertiary as index, but links to primary images.
+      Free access. Largest genealogy database.
+
+  ancestry:
+    name: Ancestry.com
+    description: Commercial genealogy database
+    url: https://www.ancestry.com
+    api_endpoint: null  # Requires subscription
+    provider: ancestry
+    source_level: tertiary
+    coverage:
+      geographic:
+        - United States
+        - Global
+      temporal:
+        start: 1500
+        end: 2000
+    record_types:
+      - census
+      - vital_records
+      - military
+      - immigration
+      - newspapers
+    notes: Subscription required. Has many exclusive record sets.
+
+  findagrave:
+    name: Find A Grave
+    description: Cemetery and burial records
+    url: https://www.findagrave.com
+    api_endpoint: null
+    provider: findagrave
+    source_level: secondary
+    coverage:
+      geographic:
+        - United States
+        - Global
+      temporal:
+        start: 1600
+        end: 2025
+    record_types:
+      - burial
+      - cemetery
+      - obituary
+    notes: User-contributed. Verify with primary sources.
+
+  # =============================================================================
+  # US CENSUS
+  # =============================================================================
+
+  us_census:
+    name: US Federal Census
+    description: Decennial census records 1790-1950
+    url: https://www.familysearch.org/search/collection/list?page=1&countryId=1&collectionId=1325221
+    provider: familysearch
+    source_level: primary
+    coverage:
+      geographic:
+        - United States
+      temporal:
+        start: 1790
+        end: 1950
+    record_types:
+      - census
+    notes: |
+      1790-1840: Head of household only
+      1850+: All household members
+      1880+: Relationships stated
+      1940: Most recent publicly available
+
+  # =============================================================================
+  # IMMIGRATION / EMIGRATION
+  # =============================================================================
+
+  castle_garden:
+    name: Castle Garden / Battery
+    description: New York immigration before Ellis Island
+    url: https://www.castlegarden.org
+    provider: castle_garden
+    source_level: primary
+    coverage:
+      geographic:
+        - New York
+        - United States
+      temporal:
+        start: 1820
+        end: 1892
+    record_types:
+      - passenger_manifest
+      - immigration
+    notes: Pre-Ellis Island immigration to New York.
+
+  ellis_island:
+    name: Ellis Island
+    description: New York immigration 1892-1957
+    url: https://www.libertyellisfoundation.org
+    provider: statue_of_liberty
+    source_level: primary
+    coverage:
+      geographic:
+        - New York
+        - United States
+      temporal:
+        start: 1892
+        end: 1957
+    record_types:
+      - passenger_manifest
+      - immigration
+    notes: Primary immigration port for US 1892-1954.
+
+  red_star_line:
+    name: Red Star Line (Antwerp)
+    description: Belgian emigration to America via Red Star Line
+    url: https://www.redstarline.be
+    provider: red_star_line_museum
+    source_level: primary
+    coverage:
+      geographic:
+        - Antwerp
+        - Belgium
+        - United States
+      temporal:
+        start: 1873
+        end: 1934
+    record_types:
+      - passenger_manifest
+      - emigration
+    notes: |
+      Major emigration route from Belgium/Europe to US.
+      Museum in Antwerp has archives.
+
+  # =============================================================================
+  # USER-CONTRIBUTED / TERTIARY
+  # =============================================================================
+
+  geneanet:
+    name: Geneanet
+    description: European family trees and records
+    url: https://www.geneanet.org
+    api_endpoint: https://api.geneanet.org
+    provider: geneanet
+    source_level: tertiary
+    coverage:
+      geographic:
+        - France
+        - Belgium
+        - Europe
+      temporal:
+        start: 1400
+        end: 2000
+    record_types:
+      - family_trees
+      - transcriptions
+    notes: |
+      User-contributed trees. Strong for French/Belgian research.
+      Verify all claims with primary sources.
+
+# =============================================================================
+# ROUTING RULES
+# Rules for automatic source selection based on person context
+# =============================================================================
+
+routing_rules:
+  # Cherokee ancestry rules
+  - name: cherokee_dawes
+    conditions:
+      ethnic_markers: [Cherokee, Creek, Choctaw, Chickasaw, Seminole]
+      temporal:
+        start: 1898
+        end: 1914
+    sources: [dawes_rolls]
+    priority: 1
+
+  - name: cherokee_baker
+    conditions:
+      ethnic_markers: [Cherokee, Eastern Band Cherokee]
+      geographic: [North Carolina]
+      temporal:
+        start: 1920
+        end: 1930
+    sources: [baker_roll]
+    priority: 1
+
+  - name: cherokee_chapman
+    conditions:
+      ethnic_markers: [Cherokee]
+      geographic: [North Carolina, Tennessee, Georgia, Alabama]
+      temporal:
+        start: 1848
+        end: 1855
+    sources: [chapman_roll, mullay_roll]
+    priority: 1
+
+  # Belgian rules
+  - name: belgian_civil
+    conditions:
+      geographic: [Belgium, Antwerp, Brabant, Flanders]
+      temporal:
+        start: 1796
+        end: 1912
+    sources: [belgian_state_archives]
+    priority: 1
+
+  - name: belgian_church
+    conditions:
+      geographic: [Belgium, Southern Netherlands]
+      temporal:
+        start: 1500
+        end: 1796
+    sources: [belgian_parish_registers]
+    priority: 1
+
+  - name: antwerp_city
+    conditions:
+      geographic: [Antwerp]
+    sources: [antwerp_felixarchief, belgian_state_archives]
+    priority: 2
+
+  # US rules
+  - name: us_census
+    conditions:
+      geographic: [United States]
+      temporal:
+        start: 1790
+        end: 1950
+    sources: [us_census, familysearch]
+    priority: 1
+
+  # Immigration rules
+  - name: belgian_emigration
+    conditions:
+      geographic: [Belgium, Antwerp]
+      migration_to: [United States]
+      temporal:
+        start: 1873
+        end: 1934
+    sources: [red_star_line, castle_garden, ellis_island]
+    priority: 1
+
+  - name: us_immigration_early
+    conditions:
+      geographic: [United States]
+      record_types: [immigration]
+      temporal:
+        start: 1820
+        end: 1892
+    sources: [castle_garden]
+    priority: 1
+
+  - name: us_immigration_ellis
+    conditions:
+      geographic: [United States]
+      record_types: [immigration]
+      temporal:
+        start: 1892
+        end: 1957
+    sources: [ellis_island]
+    priority: 1
+
+  # Fallback rules
+  - name: general_us
+    conditions:
+      geographic: [United States]
+    sources: [familysearch, findagrave]
+    priority: 10
+
+  - name: general_europe
+    conditions:
+      geographic: [Belgium, Netherlands, France, Germany]
+    sources: [geneanet, familysearch]
+    priority: 10

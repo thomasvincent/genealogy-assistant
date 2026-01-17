@@ -1,0 +1,23 @@
+# Development overrides for docker-compose.yml
+# This file is automatically loaded when running `docker compose up`
+
+services:
+  api:
+    # Mount source code for hot reloading
+    volumes:
+      - ./src:/app/src:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    # Enable reload for development
+    command: ["python", "-m", "uvicorn", "genealogy_assistant.web:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      - LOG_LEVEL=DEBUG
+
+  gramps-web:
+    # Enable debug mode
+    environment:
+      - GRAMPSWEB_TREE=${GRAMPS_TREE_NAME:-Family Tree}
+      - GRAMPSWEB_SECRET_KEY=${GRAMPS_SECRET_KEY:-dev-secret-key}
+      - GRAMPSWEB_USER_DB_URI=sqlite:////app/data/users.sqlite
+      - GRAMPSWEB_MEDIA_BASE_DIR=/app/media
+      - GUNICORN_TIMEOUT=300

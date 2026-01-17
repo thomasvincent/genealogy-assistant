@@ -21,6 +21,7 @@ from genealogy_assistant.api.assistant import GenealogyAssistant, AssistantConfi
 from genealogy_assistant.core.gedcom import GedcomManager
 from genealogy_assistant.core.models import ConfidenceLevel
 from genealogy_assistant.search.unified import UnifiedSearch, UnifiedSearchConfig
+from genealogy_assistant.adapters.gramps_web.api import router as smart_search_router
 
 
 # =============================================================================
@@ -73,6 +74,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Smart Search Router
+app.include_router(smart_search_router, prefix="/api")
 
 
 # =============================================================================
