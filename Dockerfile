@@ -6,11 +6,16 @@ FROM python:3.12-slim as builder
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies including Gramps requirements
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
+    # Gramps build dependencies
+    libxml2-dev \
+    libxslt1-dev \
+    # For lxml compilation
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for package management
@@ -30,10 +35,18 @@ FROM python:3.12-slim as runtime
 
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies for Gramps
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # XML processing (required by Gramps)
     libxml2 \
     libxslt1.1 \
+    # GObject introspection (required by Gramps core)
+    gir1.2-glib-2.0 \
+    libgirepository-1.0-1 \
+    # ICU for internationalization (optional but recommended)
+    libicu72 \
+    # For healthcheck
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and directories
