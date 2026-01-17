@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  # Main Genealogy Assistant Service
+  genealogy-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: genealogy-assistant
+    environment:
+      # Claude API key - set in .env file or environment
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # Gramps Web connection (if using)
+      - GRAMPS_WEB_URL=${GRAMPS_WEB_URL:-http://gramps-web:5000}
+      - GRAMPS_WEB_USER=${GRAMPS_WEB_USER:-}
+      - GRAMPS_WEB_PASS=${GRAMPS_WEB_PASS:-}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      # Mount local data directory for GEDCOM files
+      - ./data:/app/data
+      # Mount logs
+      - ./logs:/app/logs
+      # Mount Gramps database if using local Gramps
+      - ${GRAMPS_DB_PATH:-./gramps-db}:/app/gramps-db:ro
+    networks:
+      - genealogy-net
+    depends_on:
+      - gramps-web
+    restart: unless-stopped
+
+  # Gramps Web API Server
+  gramps-web:
+    image: ghcr.io/gramps-project/grampsweb:latest
+    container_name: gramps-web
+    environment:
+      - GRAMPSWEB_TREE=${GRAMPS_TREE_NAME:-Family Tree}
+      - GRAMPSWEB_SECRET_KEY=${GRAMPS_SECRET_KEY:-change-me-in-production}
+      - GRAMPSWEB_USER_DB_URI=sqlite:////app/data/users.sqlite
+      - GRAMPSWEB_MEDIA_BASE_DIR=/app/media
+      # Increase timeout for GEDCOM imports (5 minutes)
+      - GUNICORN_TIMEOUT=300
+    volumes:
+      # Gramps database storage
+      - gramps-data:/root/.gramps
+      # Media files (photos, documents)
+      - gramps-media:/app/media
+      # User database
+      - gramps-users:/app/data
+    ports:
+      - "5050:5000"
+    networks:
+      - genealogy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/metadata/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web API for the Genealogy Assistant (FastAPI)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: genealogy-api
+    entrypoint: []
+    command: ["python", "-m", "uvicorn", "genealogy_assistant.web:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GRAMPS_WEB_URL=http://gramps-web:5000
+      - GRAMPS_WEB_USER=${GRAMPS_WEB_USER:-}
+      - GRAMPS_WEB_PASS=${GRAMPS_WEB_PASS:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - genealogy-net
+    depends_on:
+      - gramps-web
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for caching search results (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: genealogy-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - genealogy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  genealogy-net:
+    driver: bridge
+
+volumes:
+  gramps-data:
+    driver: local
+  gramps-media:
+    driver: local
+  gramps-users:
+    driver: local
+  redis-data:
+    driver: local
