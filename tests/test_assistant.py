@@ -12,7 +12,7 @@ from genealogy_assistant.api.assistant import (
     AssistantResponse,
     ResearchTask,
 )
-from genealogy_assistant.core.models import ConfidenceLevel, Person, PersonName
+from genealogy_assistant.core.models import ConfidenceLevel, Name, Person
 
 
 class TestAssistantConfig:
@@ -213,8 +213,8 @@ class TestGenealogyAssistant:
             assistant = GenealogyAssistant(AssistantConfig(api_key="test"))
             await assistant.connect()
 
-            target = Person(id="P1")
-            target.primary_name = PersonName(surname="HERINCKX", given="Jean")
+            target = Person()
+            target.names.append(Name(surname="HERINCKX", given="Jean"))
 
             response = await assistant.create_research_plan(
                 target,

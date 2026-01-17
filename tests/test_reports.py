@@ -7,15 +7,15 @@ from pathlib import Path
 import pytest
 
 from genealogy_assistant.core.models import (
-    Person,
-    PersonName,
-    Family,
-    Source,
-    SourceLevel,
     ConfidenceLevel,
     ConclusionStatus,
-    ResearchLog,
+    Family,
+    Name,
+    Person,
     ProofSummary,
+    ResearchLog,
+    Source,
+    SourceLevel,
 )
 from genealogy_assistant.reports.proof import ProofSummaryReport
 from genealogy_assistant.reports.research_log import ResearchLogReport
@@ -162,11 +162,11 @@ class TestFamilyGroupSheet:
 
     def test_generate_markdown(self, sample_person: Person, sample_family: Family):
         """Test family group sheet generation."""
-        wife = Person(id="I002")
-        wife.primary_name = PersonName(surname="DE SMET", given="Marie Catherine")
+        wife = Person()
+        wife.names.append(Name(surname="DE SMET", given="Marie Catherine"))
 
-        child = Person(id="I003")
-        child.primary_name = PersonName(surname="HERINCKX", given="Victor")
+        child = Person()
+        child.names.append(Name(surname="HERINCKX", given="Victor"))
 
         sheet = FamilyGroupSheet(
             family=sample_family,
@@ -210,11 +210,11 @@ class TestPedigreeChart:
 
     def test_generate_markdown(self, sample_person: Person):
         """Test pedigree chart generation."""
-        father = Person(id="I010")
-        father.primary_name = PersonName(surname="HERINCKX", given="Pierre")
+        father = Person()
+        father.names.append(Name(surname="HERINCKX", given="Pierre"))
 
-        mother = Person(id="I011")
-        mother.primary_name = PersonName(surname="JANSSENS", given="Maria")
+        mother = Person()
+        mother.names.append(Name(surname="JANSSENS", given="Maria"))
 
         chart = PedigreeChart(
             subject=sample_person,
@@ -246,15 +246,15 @@ class TestPedigreeChart:
         assert chart.ancestors.get(1) == sample_person
 
         # Father should be 2 * subject
-        father = Person(id="F")
-        father.primary_name = PersonName(surname="HERINCKX", given="Father")
+        father = Person()
+        father.names.append(Name(surname="HERINCKX", given="Father"))
         chart.add_ancestor(2, father)
 
         assert chart.get_father(1) == father
 
         # Mother should be 2 * subject + 1
-        mother = Person(id="M")
-        mother.primary_name = PersonName(surname="TEST", given="Mother")
+        mother = Person()
+        mother.names.append(Name(surname="TEST", given="Mother"))
         chart.add_ancestor(3, mother)
 
         assert chart.get_mother(1) == mother

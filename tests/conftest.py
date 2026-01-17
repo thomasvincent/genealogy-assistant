@@ -9,21 +9,23 @@ from typing import Generator
 import pytest
 
 from genealogy_assistant.core.models import (
-    Person,
-    PersonName,
-    Family,
-    Event,
-    Place,
-    GenealogyDate,
-    Source,
     Citation,
-    SourceLevel,
     ConfidenceLevel,
     ConclusionStatus,
+    Event,
+    Family,
+    GenealogyDate,
+    Name,
+    Person,
+    Place,
+    ProofSummary,
     ResearchLog,
     ResearchLogEntry,
-    ProofSummary,
+    Source,
+    SourceLevel,
 )
+from genealogy_assistant.router.registry import SourceRegistry
+from genealogy_assistant.router.smart_router import PersonContext, SmartRouter
 
 
 # =============================================================================
@@ -56,13 +58,15 @@ def sample_date() -> GenealogyDate:
 @pytest.fixture
 def sample_person(sample_place: Place, sample_date: GenealogyDate) -> Person:
     """Create a sample person."""
-    person = Person(id="I001")
-    person.primary_name = PersonName(
-        surname="HERINCKX",
-        given="Jean Joseph",
-        prefix="",
-        suffix="",
-        variants=["Herinckx", "Herincx", "Herinck"],
+    person = Person()
+    person.names.append(
+        Name(
+            surname="HERINCKX",
+            given="Jean Joseph",
+            prefix="",
+            suffix="",
+            variants=["Herinckx", "Herincx", "Herinck"],
+        )
     )
     person.birth = Event(
         event_type="BIRT",
@@ -80,14 +84,14 @@ def sample_person(sample_place: Place, sample_date: GenealogyDate) -> Person:
 @pytest.fixture
 def sample_family(sample_person: Person) -> Family:
     """Create a sample family."""
-    wife = Person(id="I002")
-    wife.primary_name = PersonName(surname="DE SMET", given="Marie Catherine")
+    wife = Person()
+    wife.names.append(Name(surname="DE SMET", given="Marie Catherine"))
 
-    child1 = Person(id="I003")
-    child1.primary_name = PersonName(surname="HERINCKX", given="Victor")
+    child1 = Person()
+    child1.names.append(Name(surname="HERINCKX", given="Victor"))
 
-    child2 = Person(id="I004")
-    child2.primary_name = PersonName(surname="HERINCKX", given="Frank")
+    child2 = Person()
+    child2.names.append(Name(surname="HERINCKX", given="Frank"))
 
     family = Family(
         id="F001",
@@ -260,3 +264,95 @@ AI-assisted hypothesis generation was used. Conclusions rely solely on documente
         content = [MockContent()]
 
     return MockResponse()
+
+
+# =============================================================================
+# Router Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def source_registry() -> SourceRegistry:
+    """Create a source registry from the bundled sources.yaml."""
+    return SourceRegistry()
+
+
+@pytest.fixture
+def smart_router() -> SmartRouter:
+    """Create a SmartRouter with AI fallback disabled."""
+    return SmartRouter(enable_ai_fallback=False)
+
+
+@pytest.fixture
+def smart_router_with_ai() -> SmartRouter:
+    """Create a SmartRouter with AI fallback enabled."""
+    return SmartRouter(enable_ai_fallback=True)
+
+
+@pytest.fixture
+def belgian_person() -> Person:
+    """Create a person born in Belgium for router testing."""
+    person = Person()
+    person.names.append(
+        Name(
+            given="Jean Joseph",
+            surname="Herinckx",
+            variants=["Herincx", "Herinck"],
+        )
+    )
+    person.birth = Event(
+        event_type="BIRT",
+        date=GenealogyDate(year=1850, month=3, day=15),
+        place=Place(
+            name="Tervuren, Brabant, Belgium",
+            city="Tervuren",
+            state="Brabant",
+            country="Belgium",
+        ),
+    )
+    person.death = Event(
+        event_type="DEAT",
+        date=GenealogyDate(year=1920, month=8, day=22),
+        place=Place(
+            name="Detroit, Michigan, USA",
+            city="Detroit",
+            state="Michigan",
+            country="USA",
+        ),
+    )
+    return person
+
+
+@pytest.fixture
+def cherokee_person() -> Person:
+    """Create a person with Cherokee ancestry for router testing."""
+    person = Person()
+    person.names.append(
+        Name(
+            given="John",
+            surname="Swimmer",
+        )
+    )
+    person.birth = Event(
+        event_type="BIRT",
+        date=GenealogyDate(year=1900),
+        place=Place(
+            name="Cherokee Nation, Oklahoma",
+            country="Cherokee Nation",
+        ),
+    )
+    return person
+
+
+@pytest.fixture
+def belgian_person_context(belgian_person: Person) -> PersonContext:
+    """Create a PersonContext from a Belgian person."""
+    return PersonContext.from_person(belgian_person)
+
+
+@pytest.fixture
+def cherokee_person_context(cherokee_person: Person) -> PersonContext:
+    """Create a PersonContext from a Cherokee person."""
+    context = PersonContext.from_person(cherokee_person)
+    context.ethnic_markers = ["Cherokee"]
+    return context

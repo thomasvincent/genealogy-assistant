@@ -6,16 +6,16 @@ import pytest
 from datetime import datetime
 
 from genealogy_assistant.core.models import (
-    Person,
-    PersonName,
-    Family,
-    Event,
-    Place,
-    GenealogyDate,
-    Source,
-    SourceLevel,
     ConfidenceLevel,
     ConclusionStatus,
+    Event,
+    Family,
+    GenealogyDate,
+    Name,
+    Person,
+    Place,
+    Source,
+    SourceLevel,
 )
 
 
@@ -125,7 +125,7 @@ class TestPersonName:
 
     def test_full_name(self):
         """Test full name generation."""
-        name = PersonName(
+        name = Name(
             surname="HERINCKX",
             given="Jean Joseph",
         )
@@ -133,7 +133,7 @@ class TestPersonName:
 
     def test_full_name_with_prefix(self):
         """Test full name with prefix."""
-        name = PersonName(
+        name = Name(
             surname="BERG",
             given="Johannes",
             prefix="van den",
@@ -142,7 +142,7 @@ class TestPersonName:
 
     def test_full_name_with_suffix(self):
         """Test full name with suffix."""
-        name = PersonName(
+        name = Name(
             surname="SMITH",
             given="John",
             suffix="Jr.",
@@ -151,7 +151,7 @@ class TestPersonName:
 
     def test_surname_variants(self):
         """Test surname variants."""
-        name = PersonName(
+        name = Name(
             surname="HERINCKX",
             given="Jean",
             variants=["Herincx", "Herinck", "Herinxc"],
