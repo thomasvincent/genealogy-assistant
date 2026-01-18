@@ -188,9 +188,19 @@ class GedcomManager:
                 if current_record:
                     self.records[current_record.id or current_record.tag] = current_record
 
+                # For records with xref like "0 @I001@ INDI", tag is INDI
+                # For header/trailer like "0 HEAD", tag is HEAD
+                record_tag = parsed.tag
+                if parsed.xref and not parsed.value:
+                    # Case: "0 @I001@ INDI" -> tag is the record type
+                    record_tag = parsed.tag
+                elif parsed.xref and parsed.value:
+                    # Case: "0 @I001@ TAG value" -> value contains data, tag is type
+                    record_tag = parsed.tag
+
                 current_record = GedcomRecord(
                     id=parsed.xref,
-                    tag=parsed.tag if not parsed.xref else parsed.value,
+                    tag=record_tag,
                     lines=[parsed],
                 )
 
@@ -265,7 +275,7 @@ class GedcomManager:
         self._next_repo_id += 1
         return id_str
 
-    def validate(self) -> list[GedcomValidationError]:
+    def validate(self) -> list[str]:
         """
         Validate GEDCOM file integrity.
 
@@ -274,15 +284,53 @@ class GedcomManager:
         - Bidirectional links (FAMC/FAMS, CHIL)
         - Date formats
         - Required fields
+
+        Returns list of string messages like "ERROR: ..." or "WARNING: ...".
         """
         self.errors = []
         self.warnings = []
 
+        self._validate_header()
         self._validate_ids()
         self._validate_links()
         self._validate_dates()
 
-        return self.errors + self.warnings
+        # Convert to string messages
+        messages = []
+        for err in self.errors:
+            prefix = "ERROR" if err.severity == "error" else "WARNING"
+            messages.append(f"{prefix}: {err.message}")
+        for warn in self.warnings:
+            prefix = "WARNING" if warn.severity == "warning" else "ERROR"
+            messages.append(f"{prefix}: {warn.message}")
+
+        return messages
+
+    def _validate_header(self) -> None:
+        """Check for valid GEDCOM header."""
+        if not self.header:
+            self.errors.append(GedcomValidationError(
+                severity="error",
+                record_id=None,
+                line_number=None,
+                message="Missing GEDCOM header (HEAD record)",
+            ))
+        else:
+            # Check for required header elements
+            has_gedc = False
+            has_sour = False
+            for line in self.header.lines:
+                if line.tag == "GEDC":
+                    has_gedc = True
+                if line.tag == "SOUR":
+                    has_sour = True
+            if not has_gedc:
+                self.warnings.append(GedcomValidationError(
+                    severity="warning",
+                    record_id="HEAD",
+                    line_number=None,
+                    message="Header missing GEDC (GEDCOM version) tag",
+                ))
 
     def _validate_ids(self) -> None:
         """Check for duplicate IDs."""
@@ -420,9 +468,23 @@ class GedcomManager:
         for line in record.lines:
             f.write(line.to_string() + "\n")
 
+    def _normalize_id(self, id_str: str, prefix: str = "I") -> str:
+        """Normalize ID to GEDCOM @X###@ format."""
+        if id_str.startswith("@") and id_str.endswith("@"):
+            return id_str
+        # Strip any existing prefix letter if present
+        if id_str and id_str[0].isalpha():
+            id_str = id_str[1:]
+        return f"@{prefix}{id_str}@"
+
     def get_person(self, gedcom_id: str) -> Person | None:
         """Convert GEDCOM individual to Person model."""
-        record = self.individuals.get(gedcom_id)
+        # Normalize ID to @I###@ format
+        normalized_id = self._normalize_id(gedcom_id, "I")
+        record = self.individuals.get(normalized_id)
+        if not record:
+            # Try as-is in case already formatted
+            record = self.individuals.get(gedcom_id)
         if not record:
             return None
 
@@ -459,7 +521,7 @@ class GedcomManager:
                     if subline.level <= line.level and subline != line:
                         break
                     if subline.tag == "DATE":
-                        birth_date = GenealogyDate.from_string(subline.value)
+                        birth_date = GenealogyDate.from_gedcom(subline.value)
                     if subline.tag == "PLAC":
                         birth_place = Place.from_string(subline.value)
 
@@ -479,7 +541,7 @@ class GedcomManager:
                     if subline.level <= line.level and subline != line:
                         break
                     if subline.tag == "DATE":
-                        death_date = GenealogyDate.from_string(subline.value)
+                        death_date = GenealogyDate.from_gedcom(subline.value)
                     if subline.tag == "PLAC":
                         death_place = Place.from_string(subline.value)
 
@@ -498,6 +560,57 @@ class GedcomManager:
         # person.parent_family_ids = famc_refs  # type mismatch, for illustration
 
         return person
+
+    def get_family(self, family_id: str) -> Family | None:
+        """Convert GEDCOM family to Family model."""
+        # Normalize ID to @F###@ format
+        normalized_id = self._normalize_id(family_id, "F")
+        record = self.families.get(normalized_id)
+        if not record:
+            record = self.families.get(family_id)
+        if not record:
+            return None
+
+        # Extract spouse IDs (strip @ markers)
+        husb_refs = record.get_all_values("HUSB")
+        wife_refs = record.get_all_values("WIFE")
+        child_refs = record.get_all_values("CHIL")
+
+        def strip_at(ref: str) -> str:
+            return ref.strip("@")
+
+        husband_id = strip_at(husb_refs[0]) if husb_refs else None
+        wife_id = strip_at(wife_refs[0]) if wife_refs else None
+        child_ids = [strip_at(c) for c in child_refs]
+
+        family = Family(
+            gedcom_id=family_id,
+            husband_id=husband_id,
+            wife_id=wife_id,
+            child_ids=child_ids,
+        )
+
+        # Parse marriage event
+        for line in record.lines:
+            if line.tag == "MARR":
+                marriage_date = None
+                marriage_place = None
+                for subline in record.lines[record.lines.index(line):]:
+                    if subline.level <= line.level and subline != line:
+                        break
+                    if subline.tag == "DATE":
+                        marriage_date = GenealogyDate.from_gedcom(subline.value)
+                    if subline.tag == "PLAC":
+                        marriage_place = Place.from_string(subline.value)
+                if marriage_date or marriage_place:
+                    family.marriage = Event(
+                        event_type="MARR",
+                        date=marriage_date,
+                        place=marriage_place,
+                    )
+                break
+
+        return family
 
     def add_person(self, person: Person) -> str:
         """
@@ -668,12 +781,16 @@ class GedcomManager:
             "warnings": len(self.warnings),
         }
 
+    def stats(self) -> dict:
+        """Alias for get_statistics()."""
+        return self.get_statistics()
+
     def find_person_by_name(
         self,
         given: str | None = None,
         surname: str | None = None,
     ) -> list[str]:
-        """Find individuals by name."""
+        """Find individuals by name (returns GEDCOM IDs)."""
         results = []
 
         for indi_id, record in self.individuals.items():
@@ -687,13 +804,27 @@ class GedcomManager:
 
         return results
 
+    def find_persons(
+        self,
+        surname: str | None = None,
+        given_name: str | None = None,
+    ) -> list[Person]:
+        """Find individuals by name (returns Person objects)."""
+        gedcom_ids = self.find_person_by_name(given=given_name, surname=surname)
+        results = []
+        for gid in gedcom_ids:
+            person = self.get_person(gid)
+            if person:
+                results.append(person)
+        return results
+
     def generate_name_variants(self, surname: str) -> list[str]:
         """
         Generate common spelling variants for a surname.
 
         Essential for Belgian/Dutch/German research.
         """
-        variants = {surname}
+        variants = {surname, surname.lower()}
 
         # Common Belgian/Dutch substitutions
         substitutions = [
@@ -721,3 +852,44 @@ class GedcomManager:
                 variants.add(surname.lower().replace(single, double, 1))
 
         return sorted(v.title() for v in variants)
+
+    def generate_surname_variants(self, surname: str) -> list[str]:
+        """
+        Generate surname variants, preserving original case and handling prefixes.
+
+        Handles Belgian/Dutch prefixes like "VAN DEN", "DE", etc.
+        """
+        # Always include original case
+        variants = {surname}
+
+        # Get base variants (title case)
+        base_variants = set(self.generate_name_variants(surname))
+        variants.update(base_variants)
+
+        # Check for common prefixes
+        prefixes = ["VAN DEN ", "VAN DE ", "VAN DER ", "VAN ", "DE ", "DEN ", "DER "]
+        for prefix in prefixes:
+            if surname.upper().startswith(prefix):
+                # Extract the main surname part
+                main_surname = surname[len(prefix):]
+                main_variants = self.generate_name_variants(main_surname)
+                variants.update(main_variants)
+                # Also include just the main part
+                variants.add(main_surname)
+                variants.add(main_surname.upper())
+                # Include concatenated versions (Vandenberg)
+                concat = prefix.replace(" ", "").title() + main_surname.lower()
+                variants.add(concat)
+                # Include spaced title case version
+                variants.add(prefix.lower().strip() + " " + main_surname.title())
+                break
+
+        # Include both original case and title case
+        result = set()
+        for v in variants:
+            result.add(v)
+            result.add(v.title())
+            if surname.isupper():
+                result.add(v.upper())
+
+        return sorted(result)

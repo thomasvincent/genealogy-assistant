@@ -58,7 +58,7 @@ def sample_date() -> GenealogyDate:
 @pytest.fixture
 def sample_person(sample_place: Place, sample_date: GenealogyDate) -> Person:
     """Create a sample person."""
-    person = Person()
+    person = Person(id="I001")
     person.names.append(
         Name(
             surname="HERINCKX",

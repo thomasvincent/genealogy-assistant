@@ -212,9 +212,12 @@ class TestConfidenceLevel:
     """Tests for ConfidenceLevel enum."""
 
     def test_confidence_values(self):
-        """Test confidence level values."""
-        assert ConfidenceLevel.GPS_COMPLETE.value == "GPS Complete (5/5)"
-        assert ConfidenceLevel.SPECULATIVE.value == "Speculative (1/5)"
+        """Test confidence level values (IntEnum 1-5)."""
+        assert ConfidenceLevel.GPS_COMPLETE.value == 5
+        assert ConfidenceLevel.SPECULATIVE.value == 1
+        assert ConfidenceLevel.WEAK.value == 2
+        assert ConfidenceLevel.REASONABLE.value == 3
+        assert ConfidenceLevel.STRONG.value == 4
 
     def test_confidence_ordering(self):
         """Test confidence levels can be compared."""
@@ -227,15 +230,17 @@ class TestConfidenceLevel:
         ]
         # Verify all levels are present
         assert len(levels) == 5
+        # Verify ordering works (IntEnum supports comparison)
+        assert ConfidenceLevel.SPECULATIVE < ConfidenceLevel.GPS_COMPLETE
 
 
 class TestConclusionStatus:
     """Tests for ConclusionStatus enum."""
 
     def test_conclusion_statuses(self):
-        """Test all conclusion status values."""
-        assert ConclusionStatus.PROVEN.value == "Proven"
-        assert ConclusionStatus.LIKELY.value == "Likely"
-        assert ConclusionStatus.PROPOSED.value == "Proposed"
-        assert ConclusionStatus.DISPROVEN.value == "Disproven"
-        assert ConclusionStatus.UNSUBSTANTIATED.value == "Unsubstantiated Family Lore"
+        """Test all conclusion status values (lowercase snake_case)."""
+        assert ConclusionStatus.PROVEN.value == "proven"
+        assert ConclusionStatus.LIKELY.value == "likely"
+        assert ConclusionStatus.PROPOSED.value == "proposed"
+        assert ConclusionStatus.DISPROVEN.value == "disproven"
+        assert ConclusionStatus.UNSUBSTANTIATED.value == "unsubstantiated_family_lore"

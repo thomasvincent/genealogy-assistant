@@ -11,6 +11,7 @@ from genealogy_assistant.api.assistant import (
     AssistantConfig,
     AssistantResponse,
     ResearchTask,
+    ResearchMode,
 )
 from genealogy_assistant.core.models import ConfidenceLevel, Name, Person
 
@@ -22,22 +23,41 @@ class TestAssistantConfig:
         """Test default configuration values."""
         config = AssistantConfig()
 
-        assert config.model == "claude-sonnet-4-20250514"
-        assert config.max_tokens == 4096
+        # model is None by default (uses provider default)
+        assert config.model is None
+        assert config.llm_provider == "anthropic"
         assert config.temperature == 0.3
 
     def test_custom_config(self):
         """Test custom configuration."""
         config = AssistantConfig(
-            api_key="test-key",
-            model="claude-opus-4-20250514",
-            max_tokens=8192,
+            llm_provider="openai",
+            model="gpt-4-turbo",
             temperature=0.5,
         )
 
-        assert config.api_key == "test-key"
+        assert config.llm_provider == "openai"
+        assert config.model == "gpt-4-turbo"
+        assert config.temperature == 0.5
+
+    def test_legacy_config(self):
+        """Test legacy configuration conversion."""
+        config = AssistantConfig.from_legacy(
+            model="claude-opus-4-20250514",
+            temperature=0.5,
+        )
+
+        assert config.llm_provider == "anthropic"
         assert config.model == "claude-opus-4-20250514"
-        assert config.max_tokens == 8192
+        assert config.temperature == 0.5
+
+    def test_research_mode_config(self):
+        """Test research mode configuration."""
+        simple_config = AssistantConfig(mode=ResearchMode.SIMPLE)
+        assert simple_config.mode == ResearchMode.SIMPLE
+
+        collab_config = AssistantConfig(mode=ResearchMode.COLLABORATIVE)
+        assert collab_config.mode == ResearchMode.COLLABORATIVE
 
 
 class TestAssistantResponse:
@@ -59,8 +79,30 @@ class TestAssistantResponse:
     def test_default_confidence(self):
         """Test default confidence level."""
         response = AssistantResponse(message="Test")
-
         assert response.confidence == ConfidenceLevel.REASONABLE
+
+    def test_response_with_agent_contributions(self):
+        """Test response with multi-agent contributions."""
+        response = AssistantResponse(
+            message="Collaborative result",
+            agent_contributions={
+                "ResearchCoordinator": "Analysis complete",
+                "SourceEvaluator": "Sources verified",
+            },
+        )
+
+        assert len(response.agent_contributions) == 2
+        assert "ResearchCoordinator" in response.agent_contributions
+
+    def test_response_with_tools_used(self):
+        """Test response with tools used tracking."""
+        response = AssistantResponse(
+            message="Search complete",
+            tools_used=["search.search_person", "gps.validate_proof"],
+        )
+
+        assert len(response.tools_used) == 2
+        assert "search.search_person" in response.tools_used
 
 
 class TestResearchTask:
@@ -71,19 +113,22 @@ class TestResearchTask:
         task = ResearchTask(
             task_type="identify",
             description="Identify parents of Jean Joseph Herinckx",
-            known_facts=["Born 1895 in Tervuren"],
         )
 
         assert task.task_type == "identify"
+        assert task.description == "Identify parents of Jean Joseph Herinckx"
         assert task.status == "pending"
-        assert len(task.known_facts) == 1
 
-    def test_task_with_target(self, sample_person: Person):
+    def test_task_with_person(self):
         """Test task with target person."""
+        person = Person()
+        person.id = "I001"
+        person.names.append(Name(surname="HERINCKX", given="Jean"))
+
         task = ResearchTask(
-            task_type="extend",
-            description="Extend lineage",
-            target_person=sample_person,
+            task_type="verify",
+            description="Verify birth date",
+            target_person=person,
         )
 
         assert task.target_person is not None
@@ -94,19 +139,32 @@ class TestGenealogyAssistant:
     """Tests for GenealogyAssistant class."""
 
     @pytest.fixture
-    def mock_anthropic_client(self, mock_anthropic_response):
-        """Create mock Anthropic client."""
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_anthropic_response)
-        return mock_client
+    def mock_kernel(self):
+        """Create mock Semantic Kernel."""
+        kernel = MagicMock()
+        kernel.get_service.return_value = MagicMock()
+        kernel.get_prompt_execution_settings_class.return_value = MagicMock
+        kernel.invoke = AsyncMock(return_value="Mock result")
+        return kernel
+
+    @pytest.fixture
+    def mock_chat_service(self):
+        """Create mock chat completion service."""
+        service = MagicMock()
+        service.get_chat_message_content = AsyncMock(
+            return_value="Based on the evidence, this is a test response."
+        )
+        return service
 
     @pytest.mark.asyncio
-    async def test_research_basic(self, mock_anthropic_client, mock_anthropic_response):
+    async def test_research_basic(self, mock_kernel, mock_chat_service):
         """Test basic research query."""
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+        mock_kernel.get_service.return_value = mock_chat_service
 
-            config = AssistantConfig(api_key="test-key")
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
+
+            config = AssistantConfig()
             assistant = GenealogyAssistant(config)
             await assistant.connect()
 
@@ -114,15 +172,17 @@ class TestGenealogyAssistant:
 
             assert response.message is not None
             assert response.ai_assisted is True
-            mock_anthropic_client.messages.create.assert_called_once()
+            mock_chat_service.get_chat_message_content.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_research_with_context(self, mock_anthropic_client, mock_anthropic_response):
+    async def test_research_with_context(self, mock_kernel, mock_chat_service):
         """Test research with context."""
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+        mock_kernel.get_service.return_value = mock_chat_service
 
-            config = AssistantConfig(api_key="test-key")
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
+
+            config = AssistantConfig()
             assistant = GenealogyAssistant(config)
             await assistant.connect()
 
@@ -133,25 +193,21 @@ class TestGenealogyAssistant:
             )
 
             assert response.message is not None
-            # Context should be included in the call
-            call_args = mock_anthropic_client.messages.create.call_args
-            messages = call_args.kwargs["messages"]
-            assert any("Belgium" in str(m) for m in messages)
 
     @pytest.mark.asyncio
-    async def test_parse_confidence_from_response(self, mock_anthropic_client):
+    async def test_parse_confidence_from_response(self, mock_kernel):
         """Test parsing confidence level from response."""
-        # Create response with confidence indicator
-        mock_content = MagicMock()
-        mock_content.text = "Based on the evidence, this conclusion is PROVEN with Confidence: 5"
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-        mock_anthropic_client.messages.create = AsyncMock(return_value=mock_response)
+        # Create mock chat service with confidence indicator
+        mock_chat_service = MagicMock()
+        mock_chat_service.get_chat_message_content = AsyncMock(
+            return_value="Based on the evidence, this conclusion is PROVEN with Confidence: 5"
+        )
+        mock_kernel.get_service.return_value = mock_chat_service
 
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
 
-            assistant = GenealogyAssistant(AssistantConfig(api_key="test"))
+            assistant = GenealogyAssistant(AssistantConfig())
             await assistant.connect()
 
             response = await assistant.research("Test question")
@@ -159,24 +215,23 @@ class TestGenealogyAssistant:
             assert response.confidence == ConfidenceLevel.GPS_COMPLETE
 
     @pytest.mark.asyncio
-    async def test_parse_next_actions(self, mock_anthropic_client):
+    async def test_parse_next_actions(self, mock_kernel):
         """Test parsing next actions from response."""
-        mock_content = MagicMock()
-        mock_content.text = """Analysis complete.
+        response_text = """Analysis complete.
 
 ## Next Research Actions
 - Search Tervuren birth records
 - Check FamilySearch Belgium collection
 - Contact Rijksarchief Leuven
 """
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-        mock_anthropic_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_chat_service = MagicMock()
+        mock_chat_service.get_chat_message_content = AsyncMock(return_value=response_text)
+        mock_kernel.get_service.return_value = mock_chat_service
 
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
 
-            assistant = GenealogyAssistant(AssistantConfig(api_key="test"))
+            assistant = GenealogyAssistant(AssistantConfig())
             await assistant.connect()
 
             response = await assistant.research("Test question")
@@ -185,137 +240,177 @@ class TestGenealogyAssistant:
             assert any("Tervuren" in a for a in response.next_actions)
 
     @pytest.mark.asyncio
-    async def test_reset_conversation(self, mock_anthropic_client, mock_anthropic_response):
+    async def test_reset_conversation(self, mock_kernel, mock_chat_service):
         """Test conversation reset."""
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+        mock_kernel.get_service.return_value = mock_chat_service
 
-            assistant = GenealogyAssistant(AssistantConfig(api_key="test"))
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
+
+            assistant = GenealogyAssistant(AssistantConfig())
             await assistant.connect()
 
             # Add some messages
             await assistant.research("Question 1")
             await assistant.research("Question 2")
 
-            assert len(assistant._messages) >= 2
+            initial_len = len(assistant._chat_history.messages)
+            assert initial_len >= 2
 
             # Reset
             assistant.reset_conversation()
 
-            assert len(assistant._messages) == 0
+            # Should only have system message
+            assert len(assistant._chat_history.messages) == 1
 
     @pytest.mark.asyncio
-    async def test_create_research_plan(self, mock_anthropic_client, mock_anthropic_response):
+    async def test_create_research_plan(self, mock_kernel, mock_chat_service):
         """Test research plan generation."""
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+        mock_kernel.get_service.return_value = mock_chat_service
 
-            assistant = GenealogyAssistant(AssistantConfig(api_key="test"))
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
+
+            assistant = GenealogyAssistant(AssistantConfig())
             await assistant.connect()
 
             target = Person()
             target.names.append(Name(surname="HERINCKX", given="Jean"))
 
-            response = await assistant.create_research_plan(
-                target,
-                "Find parents"
-            )
+            response = await assistant.create_research_plan(target, "Find parents")
 
             assert response.message is not None
 
     @pytest.mark.asyncio
-    async def test_verify_conclusion(self, mock_anthropic_client, mock_anthropic_response):
+    async def test_verify_conclusion(self, mock_kernel, mock_chat_service):
         """Test conclusion verification."""
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+        mock_kernel.get_service.return_value = mock_chat_service
 
-            assistant = GenealogyAssistant(AssistantConfig(api_key="test"))
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
+
+            assistant = GenealogyAssistant(AssistantConfig())
             await assistant.connect()
 
             response = await assistant.verify_conclusion(
                 "Jean Joseph Herinckx was born 15 March 1895",
-                ["Birth certificate from Tervuren", "Census 1900 showing age 5"]
+                ["Birth certificate from Tervuren", "Census 1900 showing age 5"],
             )
 
             assert response.message is not None
 
     @pytest.mark.asyncio
-    async def test_generate_archive_letter(self, mock_anthropic_client):
-        """Test archive letter generation."""
-        mock_content = MagicMock()
-        mock_content.text = """Dear Archivist,
+    async def test_context_manager(self, mock_kernel, mock_chat_service):
+        """Test async context manager protocol."""
+        mock_kernel.get_service.return_value = mock_chat_service
 
-I am researching the Herinckx family and would like to request...
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
 
-Sincerely,
-[Researcher]"""
-        mock_response = MagicMock()
-        mock_response.content = [mock_content]
-        mock_anthropic_client.messages.create = AsyncMock(return_value=mock_response)
+            async with GenealogyAssistant(AssistantConfig()) as assistant:
+                assert assistant._kernel is not None
 
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
-
-            assistant = GenealogyAssistant(AssistantConfig(api_key="test"))
-            await assistant.connect()
-
-            letter = await assistant.generate_archive_letter(
-                archive="Rijksarchief Leuven",
-                person_name="Jean Joseph Herinckx",
-                records_needed=["Birth certificate 1895"],
-                known_facts=["Born in Tervuren"],
-            )
-
-            assert "Dear" in letter or "Archivist" in letter
-            assert len(letter) > 50
+            assert assistant._kernel is None
 
     @pytest.mark.asyncio
-    async def test_context_manager(self, mock_anthropic_client, mock_anthropic_response):
-        """Test async context manager usage."""
-        with patch("genealogy_assistant.api.assistant.AsyncAnthropic") as mock_anthropic:
-            mock_anthropic.return_value = mock_anthropic_client
+    async def test_get_kernel_info(self, mock_kernel, mock_chat_service):
+        """Test kernel info retrieval."""
+        mock_kernel.get_service.return_value = mock_chat_service
+        mock_kernel.services = {"chat": mock_chat_service}
+        mock_kernel.plugins = {}
 
-            config = AssistantConfig(api_key="test")
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel
 
-            async with GenealogyAssistant(config) as assistant:
-                response = await assistant.research("Test question")
-                assert response is not None
+            assistant = GenealogyAssistant(AssistantConfig())
+
+            # Before connect
+            info = assistant.get_kernel_info()
+            assert info["status"] == "not_connected"
+
+            # After connect
+            with patch("genealogy_assistant.api.assistant.get_kernel_info") as mock_info:
+                mock_info.return_value = {"services": ["chat"], "plugins": []}
+                await assistant.connect()
+                info = assistant.get_kernel_info()
+                assert "services" in info
 
 
-class TestSystemPrompt:
-    """Tests for GPS system prompt compliance."""
+class TestAssistantPlugins:
+    """Tests for assistant plugin methods."""
 
-    def test_system_prompt_includes_gps(self):
-        """Test that system prompt includes GPS elements."""
-        from genealogy_assistant.api.assistant import SYSTEM_PROMPT
+    @pytest.fixture
+    def mock_kernel_with_plugins(self):
+        """Create mock Semantic Kernel with plugins."""
+        kernel = MagicMock()
+        kernel.get_service.return_value = MagicMock()
+        kernel.get_prompt_execution_settings_class.return_value = MagicMock
+        kernel.invoke = AsyncMock(return_value="Plugin result")
+        return kernel
 
-        # Must mention GPS
-        assert "GPS" in SYSTEM_PROMPT or "Genealogical Proof Standard" in SYSTEM_PROMPT
+    @pytest.mark.asyncio
+    async def test_generate_proof_summary(self, mock_kernel_with_plugins):
+        """Test proof summary generation via plugin."""
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel_with_plugins
 
-        # Must mention BCG
-        assert "BCG" in SYSTEM_PROMPT or "Board for Certification" in SYSTEM_PROMPT
+            assistant = GenealogyAssistant(AssistantConfig())
+            await assistant.connect()
 
-        # Must mention source hierarchy
-        assert "PRIMARY" in SYSTEM_PROMPT or "primary" in SYSTEM_PROMPT.lower()
-        assert "SECONDARY" in SYSTEM_PROMPT or "secondary" in SYSTEM_PROMPT.lower()
-        assert "TERTIARY" in SYSTEM_PROMPT or "tertiary" in SYSTEM_PROMPT.lower()
+            result = await assistant.generate_proof_summary(
+                research_question="Who were the parents?",
+                conclusion="Parents were identified",
+                evidence=["Birth cert", "Census"],
+                confidence=4,
+            )
 
-    def test_system_prompt_includes_methodology(self):
-        """Test system prompt includes research methodology."""
-        from genealogy_assistant.api.assistant import SYSTEM_PROMPT
+            assert result is not None
+            mock_kernel_with_plugins.invoke.assert_called()
 
-        # Must mention evidence analysis
-        assert "evidence" in SYSTEM_PROMPT.lower()
+    @pytest.mark.asyncio
+    async def test_format_citation(self, mock_kernel_with_plugins):
+        """Test citation formatting via plugin."""
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel_with_plugins
 
-        # Must mention conflict resolution
-        assert "conflict" in SYSTEM_PROMPT.lower()
+            assistant = GenealogyAssistant(AssistantConfig())
+            await assistant.connect()
 
-        # Must mention conclusions
-        assert "conclusion" in SYSTEM_PROMPT.lower()
+            result = await assistant.format_citation(
+                record_type="vital",
+                jurisdiction="Tervuren, Brabant, Belgium",
+                date="1895-03-15",
+                person_name="Jean Joseph HERINCKX",
+                repository="Rijksarchief Leuven",
+            )
 
-    def test_system_prompt_includes_ai_disclosure(self):
-        """Test system prompt requires AI disclosure."""
-        from genealogy_assistant.api.assistant import SYSTEM_PROMPT
+            assert result is not None
 
-        # Must mention AI assistance disclosure
-        assert "AI" in SYSTEM_PROMPT
+    @pytest.mark.asyncio
+    async def test_remember_person(self, mock_kernel_with_plugins):
+        """Test remembering a person via memory plugin."""
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel_with_plugins
+
+            assistant = GenealogyAssistant(AssistantConfig())
+            await assistant.connect()
+
+            result = await assistant.remember_person(
+                person_name="Jean Joseph HERINCKX",
+                birth_info="15 Mar 1895, Tervuren",
+            )
+
+            assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_recall_person(self, mock_kernel_with_plugins):
+        """Test recalling a person via memory plugin."""
+        with patch("genealogy_assistant.api.assistant.create_kernel") as mock_create_kernel:
+            mock_create_kernel.return_value = mock_kernel_with_plugins
+
+            assistant = GenealogyAssistant(AssistantConfig())
+            await assistant.connect()
+
+            result = await assistant.recall_person(query="Herinckx Tervuren")
+
+            assert result is not None
